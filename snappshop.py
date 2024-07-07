@@ -90,19 +90,18 @@ class Item:
         weights = await snappshop.get_variants(self.get_weights(), "weight")
         self.weight_ids = [{"id": size.get("id")} for size in weights]
         return weights
-    
+
     def get_prices(self):
         clean_str = self.prices.strip("[]")
         str_list = clean_str.split(",")
         float_list = [float(num.strip()) for num in str_list if num.strip()]
         return float_list
-    
+
     async def get_variants(self):
         variants = await self.get_weight_ids()
         for variant, p in zip(variants, self.get_prices()):
             variant["price"] = p
         return variants
-        
 
     @classmethod
     @lru_cache
@@ -416,7 +415,7 @@ class SnappShop(metaclass=Singleton):
         results = []
         for task in tasks:
             results.append(await task)
-            await asyncio.sleep(.5)
+            await asyncio.sleep(0.5)
         return results
 
 
