@@ -168,4 +168,5 @@ images
 # db
 snappshop-access.json
 secret.json
+token.json
 *.xlsx
