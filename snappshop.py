@@ -8,7 +8,6 @@ from pathlib import Path
 
 import aiohttp
 import pandas as pd
-from aiocache import cached
 from singleton import Singleton
 
 import cache
@@ -92,10 +91,22 @@ class Item:
         self.weight_ids = [{"id": size.get("id")} for size in weights]
         return weights
 
+    def get_prices(self):
+        clean_str = self.prices.strip("[]")
+        str_list = clean_str.split(",")
+        float_list = [float(num.strip()) for num in str_list if num.strip()]
+        return float_list
+
+    async def get_variants(self):
+        variants = await self.get_weight_ids()
+        for variant, p in zip(variants, self.get_prices()):
+            variant["price"] = p
+        return variants
+
     @classmethod
     @lru_cache
     def similar_details(cls):
-        with open(base_dir / "attributes.json") as f:
+        with open(base_dir / "db" / "attributes.json") as f:
             return json.load(f)
 
     async def create_item(self):
@@ -124,9 +135,9 @@ class Item:
             await self.get_color_ids()
             await self.get_weight_ids()
             c_rep = await self.create_item()
-            add_rep = await self.add_item_to_shop()
+            # add_rep = await self.add_item_to_shop()
             self.done = True
-            logging.info(f"Item {self.name_fa} added to shop {c_rep} {add_rep}")
+            logging.info(f"Item {self.name_fa} added to shop {c_rep}")
         except Exception as e:
             logging.error(f"item {self.id}: {e}")
 
@@ -135,13 +146,17 @@ class SnappShop(metaclass=Singleton):
     def __init__(self, token=None):
         self.base_url = "https://apix.snappshop.ir"
         self.auth_url = f"{self.base_url}/auth/v1/password-login"
-        self.vendor_url = f"{self.base_url}/vendors/v1"
+        self.vendor_id = "qJpOng"
+        self.vendor_url = f"{self.base_url}/vendors/v1/{self.vendor_id}"
         self.catalog_url = f"{self.base_url}/catalog/v1"
         self.products_url = f"{self.base_url}/products/v1"
         self.categories_url = f"{self.base_url}/categories/v1"
         self.brands_url = f"{self.base_url}/brands/v1"
         self.token: JWT = JWT(token) if token else None
         self.session = aiohttp.ClientSession(headers=self.headers)
+
+    def __repr__(self):
+        return f"SnappShop({self.vendor_id})"
 
     async def close(self):
         await self.session.close()
@@ -204,7 +219,7 @@ class SnappShop(metaclass=Singleton):
             self.session = aiohttp.ClientSession(headers=self.headers)
         return self.token
 
-    @cached()
+    @cache.file_cache()
     async def get_category(self, category_name, depth=1, id=None):
         params = {"depth": depth}
         if id:
@@ -217,7 +232,7 @@ class SnappShop(metaclass=Singleton):
                 return category
         return None
 
-    @cached()
+    @cache.file_cache()
     async def get_brand(self, brand_name):
         brands: list[dict] = (
             await self.request(url=self.brands_url, params={"query": brand_name})
@@ -227,9 +242,11 @@ class SnappShop(metaclass=Singleton):
                 return brand
         return None
 
-    @cached()
+    @cache.file_cache()
     async def seller_info(self, **kwargs):
-        return await self.request(url=f"{self.vendor_url}/seller-info", **kwargs)
+        return await self.request(
+            url=f"{self.base_url}/vendors/v1/seller-info", **kwargs
+        )
 
     def option_key(self, weightOrSize="weight"):
         if weightOrSize == "weight":
@@ -237,10 +254,10 @@ class SnappShop(metaclass=Singleton):
         if weightOrSize == "size":
             return "lgwWgo"
         if weightOrSize == "color":
-            return "color"
+            return "60rdDw"
         raise ValueError("size and weight and color accepted")
 
-    @cached()
+    @cache.file_cache()
     async def options(self, page=1, weightOrSize="weight", **kwargs):
         # if weightOrSize == "weight":
         #     cid = kwargs.get("weight", "60rdDw")
@@ -253,7 +270,7 @@ class SnappShop(metaclass=Singleton):
             **kwargs,
         )
 
-    @cached()
+    @cache.file_cache()
     async def all_options(self, weightOrSize="weight", **kwargs):
         options_data = []
         for p in range(1, 51):
@@ -263,7 +280,7 @@ class SnappShop(metaclass=Singleton):
             options_data.extend(options.get("data"))
         return options_data
 
-    @cached()
+    @cache.file_cache()
     async def get_variants(self, option_list, weightOrSize="weight"):
         options_data = await self.all_options(weightOrSize=weightOrSize)
         found_options = []
@@ -293,7 +310,7 @@ class SnappShop(metaclass=Singleton):
 
         return await self.request(
             method="post",
-            url=f"{self.vendor_url}/qJpOng/product-quotes",
+            url=f"{self.vendor_url}/product-quotes",
             json=json_data,
             **kwargs,
         )
@@ -316,7 +333,7 @@ class SnappShop(metaclass=Singleton):
 
         return await self.request(
             method="patch",
-            url=f"{self.vendor_url}/qJpOng/product-quotes/{pid}",
+            url=f"{self.vendor_url}/product-quotes/{pid}",
             json=json_data,
             **kwargs,
         )
@@ -326,7 +343,7 @@ class SnappShop(metaclass=Singleton):
 
         return await self.request(
             method="patch",
-            url=f"{self.vendor_url}/qJpOng/product-quotes/{pid}",
+            url=f"{self.vendor_url}/product-quotes/{pid}",
             json=json_data,
             **kwargs,
         )
@@ -347,7 +364,7 @@ class SnappShop(metaclass=Singleton):
 
                 headers = self.headers
                 headers.update(mp_writer.headers)
-                url = f"{self.vendor_url}/qJpOng/product-quotes/{pid}/images"
+                url = f"{self.vendor_url}/product-quotes/{pid}/images"
 
                 return await self.request(
                     method="post",
@@ -359,11 +376,12 @@ class SnappShop(metaclass=Singleton):
 
     async def submit(self, pid):
         return await self.request(
-            "patch", f"{self.vendor_url}/qJpOng/product-quotes/{pid}/submit"
+            "patch", f"{self.vendor_url}/product-quotes/{pid}/submit"
         )
 
     async def add_to_shop(self, pid, item: Item, **kwargs):
-        variants = await item.get_size_ids()
+        variants = await item.get_variants()
+        tasks = []
         for variant in variants:
             json_data = {
                 "warranty_id": "x0QZq8",
@@ -381,16 +399,24 @@ class SnappShop(metaclass=Singleton):
                     },
                 ],
                 "stock": 100,
-                "price": variant["price"] // 10,
+                "price": int(variant["price"]),
                 "capacity": 3,
             }
 
-            await self.request(
-                method="post",
-                url=f"{self.vendor_url}/qJpOng/inventory/products",
-                data=json_data,
-                **kwargs,
+            tasks.append(
+                self.request(
+                    method="post",
+                    url=f"{self.vendor_url}/inventory/products",
+                    json=json_data,
+                    **kwargs,
+                )
             )
+
+        results = []
+        for task in tasks:
+            results.append(await task)
+            await asyncio.sleep(0.5)
+        return results
 
 
 def get_item(index=0) -> Item:
@@ -399,35 +425,43 @@ def get_item(index=0) -> Item:
     return item
 
 
-async def process_row(index, item: Item, sem):
+async def process_row(item: Item, sem=asyncio.Semaphore(4)):
     async with sem:
-        if item.done and not pd.isna(item.done):
+        if getattr(item, "done", False) and not pd.isna(item.done):
             return  # skip already done items
         await item.process_item()
         # update_sheet_row(index, item.__dict__)
-        return Item.__dict__
+        return item.__dict__
+
+
+def get_token():
+    if (base_dir / "secrets" / "token.json").exists():
+        with open(base_dir / "secrets" / "token.json") as f:
+            return json.load(f).get("token")
 
 
 async def main():
-
-    token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxMDUiLCJqdGkiOiIxZmJjMDg1MGJiMzliYjI0ODExM2ViN2I1OTYxMmFjM2NmYjAwMjFjZDNiNzMwNzJkYTY3YTFiMWIwZDdhODVhMTdmMDg4NzAyMjU1NTU5OSIsImlhdCI6MTcyMDE3MTA2OS4wMzI4NjEsIm5iZiI6MTcyMDE3MTA2OS4wMzI4NjUsImV4cCI6MTcyMDc3NTg2OS4wMjM0NDIsInN1YiI6IjIzNDU0OTkiLCJzY29wZXMiOlsicm9sZTpzZWxsZXIiXSwiYXV0aG9yaXphdGlvbl9kZXRhaWxzIjpbeyJ0eXBlIjoicHVzaCIsImxvY2F0aW9ucyI6WyJjbHVzdGVyOjEwNS92aG9zdDpwcy9xdWV1ZTptcXR0LSovcm91dGluZy1rZXk6di1xSnBPbmciLCJjbHVzdGVyOjEwNS92aG9zdDpwcy9xdWV1ZTptcXR0LSovcm91dGluZy1rZXk6di1EalZtOVciLCJjbHVzdGVyOjEwNS92aG9zdDpwcy9xdWV1ZTptcXR0LSovcm91dGluZy1rZXk6di1ndzRPbTIiXSwiYWN0aW9ucyI6WyJyZWFkIiwid3JpdGUiLCJjb25maWd1cmUiXX0seyJ0eXBlIjoicHVzaCIsImxvY2F0aW9ucyI6WyJjbHVzdGVyOjEwNS92aG9zdDpwcy9leGNoYW5nZTphbXEudG9waWMvcm91dGluZy1rZXk6di1xSnBPbmciLCJjbHVzdGVyOjEwNS92aG9zdDpwcy9leGNoYW5nZTphbXEudG9waWMvcm91dGluZy1rZXk6di1EalZtOVciLCJjbHVzdGVyOjEwNS92aG9zdDpwcy9leGNoYW5nZTphbXEudG9waWMvcm91dGluZy1rZXk6di1ndzRPbTIiXSwiYWN0aW9ucyI6WyJyZWFkIl19XX0.qtC-0JzQX5xFaxNeNc-vKT4CCdUbGN8iCt1K6FAALkSwZiEPbPtIX6JbuCKCmmhDXFZc9kcp0Vt4Q8qzJiL3dRdfvWqGweafiNIea0uSNhu52DmpyrOZkT7XYNCENxM2x9ILRcl2ER4rYyP5ut8ahgVv6Vz9Buytr5OkAYxwgoQlsZr5smWoZE22dAE7UPkPgn-7GqnS8SDL4iaJwzs9pGAXQ8r3FtMytd7SrYAFe4JT91Mb9zgFwljXF8su3Ag3jySs_YqwQrKOZ_9h64HcbdyqMIrD3SzMTe17d4XZ9_ca6GbtwIXDgMrRrMWqNvyOXIVg0vq3OQOkGSmKMhDFR3FSNmb8bwdCYMWeNJzNqdQGAqcwFXrpoJcJuMjAUSprIvVNlAanYOlNJWNcov5heeONcS4kz9J3K8HVhnNlzNSpxKENsOj2cZT1Y_JOH0DiZFFVoZD4qzKlwqi2L83FZdHJSWAPFQqzfctldjlAW37rCf10_z79TfwhH3jZAgd_g_iRbMI6lYLn6xx2FJHxDmSBzcpD6_SSqmrrIt1_4r9lBPRDXaf3y_H_VqIsVykzEx02HJ3R0-pwxQ-mMDuA-SE2kBTm5z7YVNF9teuLtow9gJT5Z9Z9vMX-er2j1_EmQNJ5aRucs2txUXqtyYI126-1cDXx0_S4vFt0QwkLqNY"
+    token = get_token()
     snappshop = SnappShop(token)
     await snappshop.login()
     df = excel.get_df()
-    item = Item(df.loc[0].to_dict())
-    r = await item.get_category()
-    print(r)
+    # item = Item(df.loc[0].to_dict())
     # sem = asyncio.Semaphore(4)
+    # await process_row(item, sem)
+    # r = await item.get_category()
+    # print(r)
+    # return
+    sem = asyncio.Semaphore(4)
 
-    # tasks = []
-    # for i, row in df.iterrows():
-    #     item = Item(row.to_dict())
-    #     task = process_row(i, item, sem)
-    #     tasks.append(task)
+    tasks = []
+    for i, row in df.iterrows():
+        item = Item(row.to_dict())
+        task = process_row(item, sem)
+        tasks.append(task)
 
-    # rows = await asyncio.gather(*tasks)
-    # excel.update_excel(pd.DataFrame(rows))
-    # await snappshop.close()
+    rows = await asyncio.gather(*tasks)
+    excel.update_excel(pd.DataFrame(rows))
+    await snappshop.close()
 
 
 if __name__ == "__main__":
