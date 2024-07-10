@@ -11,33 +11,46 @@ except NameError:
     base_dir = Path(".")
 
 
-def file_cache(cache_file_name: Path = base_dir / "db" / "cache.json"):
+def file_cache(
+    cache_file_name: Path = base_dir / "db" / "cache.json", ttl=60 * 60 * 24
+):
     def decorator(func: Callable):
         def check_cache(*args, **kwargs):
-            if cache_file_name.exists():
-                key = f"{func.__name__}:{args}:{kwargs}"
-                with open(cache_file_name, "r") as f:
-                    cache = json.load(f)
-                if key in cache:
-                    cached = cache[key]
-                    timestamp = cached.get("timestamp")
-                    if datetime.datetime.now().timestamp() - timestamp < 60 * 60 * 24:
-                        return cached.get("result")
-            return None
+            if not cache_file_name.exists():
+                return
+            with open(cache_file_name, "r") as f:
+                cache = json.load(f)
+
+            if func.__name__ not in cache:
+                return
+
+            key = f"{args}:{kwargs}"
+            if key not in cache:
+                return None
+
+            cached = cache[func.__name__].get(key)
+            timestamp = cached.get("timestamp")
+            if datetime.datetime.now().timestamp() - timestamp > ttl:
+                return None
+            return cached.get("value")
 
         def update_cache(result, *args, **kwargs):
-            key = f"{func.__name__}:{args}:{kwargs}"
             if cache_file_name.exists():
                 with open(cache_file_name, "r") as f:
                     cache = json.load(f)
             else:
+                cache_file_name.parent.mkdir(parents=True, exist_ok=True)
                 cache = {}
-            cache[key] = {
+
+            cached = cache.get(func.__name__, {})
+            key = f"{args}:{kwargs}"
+            cached[key] = {
                 "result": result,
                 "timestamp": datetime.datetime.now().timestamp(),
             }
+            cache[func.__name__] = cached
             with open(cache_file_name, "w") as f:
-                json.dump(cache, f)
+                json.dump(cache, f, ensure_ascii=False, indent=4)
             return result
 
         async def async_wrapper(*args, **kwargs):
