@@ -140,7 +140,8 @@ class Item:
             c_rep = await self.create_item()
             # add_rep = await self.add_item_to_shop()
             self.done = True
-            logging.info(f"Item {self.name_fa} added to shop {c_rep}")
+            # logging.info(f"Item {self.name_fa} added to shop {c_rep}")
+            logging.info(f"Item {self.name_fa} added")
         except Exception as e:
             logging.error(f"item {self.id}: {e}")
 
