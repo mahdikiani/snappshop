@@ -12,6 +12,7 @@ from singleton import Singleton
 
 import cache
 import excel
+import check_done
 from jwtoken import JWT
 
 try:
@@ -430,13 +431,19 @@ def get_item(index=0) -> Item:
 
 
 async def process_row(item: Item, sem=asyncio.Semaphore(4)):
-    async with sem:
-        await asyncio.sleep(1)
-        if getattr(item, "done", False) and not pd.isna(item.done):
-            return  # skip already done items
-        await item.process_item()
-        # update_sheet_row(index, item.__dict__)
-        return item.__dict__
+    try:
+        async with sem:
+            await asyncio.sleep(1)
+            if getattr(item, "done", False) and not pd.isna(item.done):
+                return  # skip already done items
+
+            check_done.check_done(item.id)
+            await item.process_item()
+            check_done.add_done(item.id)
+            # update_sheet_row(index, item.__dict__)
+            return item.__dict__
+    except:
+        return
 
 
 def get_token():
