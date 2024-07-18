@@ -442,8 +442,9 @@ async def process_row(item: Item, sem=asyncio.Semaphore(4)):
             check_done.add_done(item.id)
             # update_sheet_row(index, item.__dict__)
             return item.__dict__
-    except:
-        return
+    except Exception as e:
+        logging.error(f"{e}")
+        return item.__dict__
 
 
 def get_token():
@@ -464,12 +465,6 @@ async def main():
     snappshop = SnappShop(token)
     await snappshop.login()
     df = excel.get_df()
-    # item = Item(df.loc[0].to_dict())
-    # sem = asyncio.Semaphore(4)
-    # await process_row(item, sem)
-    # r = await item.get_category()
-    # print(r)
-    # return
     sem = asyncio.Semaphore(1)
 
     tasks = []

@@ -433,6 +433,75 @@
                 }
             ],
             "timestamp": 1721290349.007813
+        },
+        "(SnappShop(gw4Om2), [0.5, 1, 1.5, 2, 2.5, 3, 4], 'weight'):{}": {
+            "result": [
+                {
+                    "id": "rg32OD",
+                    "value": "2.5"
+                },
+                {
+                    "id": "dq6GAD",
+                    "value": "1"
+                },
+                {
+                    "id": "E04yKq",
+                    "value": "3"
+                },
+                {
+                    "id": "5Do960",
+                    "value": "4"
+                },
+                {
+                    "id": "geQmdg",
+                    "value": "0.5 گرم"
+                },
+                {
+                    "id": "qnvWmq",
+                    "value": "2 گرم"
+                },
+                {
+                    "id": "gN6b4g",
+                    "value": "4 گرم"
+                },
+                {
+                    "id": "D53do0",
+                    "value": "1 گرم"
+                },
+                {
+                    "id": "qPk6R0",
+                    "value": "1.5 گرم"
+                },
+                {
+                    "id": "gewy1q",
+                    "value": "2"
+                },
+                {
+                    "id": "0QxrZg",
+                    "value": "1.5"
+                },
+                {
+                    "id": "0dQm3q",
+                    "value": "2.5 گرم"
+                },
+                {
+                    "id": "Dj4yNX",
+                    "value": "3 گرم"
+                },
+                {
+                    "id": "gNEXyE",
+                    "value": "0.5 گرم"
+                },
+                {
+                    "id": "DxdVKR",
+                    "value": "1 گرم"
+                },
+                {
+                    "id": "g8PkKw",
+                    "value": "3 گرم"
+                }
+            ],
+            "timestamp": 1721292050.757441
         }
     }
 }
