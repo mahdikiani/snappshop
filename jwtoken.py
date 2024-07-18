@@ -4,7 +4,6 @@ import json
 
 
 class JWT(str):
-
     def decode(self) -> dict:
         def base64_url_decode(input):
             # Add padding if necessary

@@ -19,7 +19,7 @@ def get_df(filepath=base_dir / "Snappshop.xlsx") -> pd.DataFrame:
     return df
 
 
-def update_excel(df, filepath: Path = base_dir / "Snappshop2.xlsx"):
+def update_excel(df, filepath: Path = base_dir / "Snappshop.xlsx"):
     if filepath.exists():
         with pd.ExcelWriter(filepath, mode="a", if_sheet_exists="replace") as writer:
             df.to_excel(writer, index=False)

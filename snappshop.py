@@ -83,7 +83,8 @@ class Item:
         clean_str = self.weights.strip("[]")
         str_list = clean_str.split(",")
         float_list = [float(num.strip()) for num in str_list if num.strip()]
-        return float_list
+        nums = [int(num) if int(num) == num else num for num in float_list]
+        return nums
 
     async def get_weight_ids(self):
         snappshop = SnappShop()
@@ -95,7 +96,8 @@ class Item:
         clean_str = self.prices.strip("[]")
         str_list = clean_str.split(",")
         float_list = [float(num.strip()) for num in str_list if num.strip()]
-        return float_list
+        nums = [int(num) if int(num) == num else num for num in float_list]
+        return nums
 
     async def get_variants(self):
         variants = await self.get_weight_ids()
@@ -146,7 +148,7 @@ class SnappShop(metaclass=Singleton):
     def __init__(self, token=None):
         self.base_url = "https://apix.snappshop.ir"
         self.auth_url = f"{self.base_url}/auth/v1/password-login"
-        self.vendor_id = "qJpOng"
+        self.vendor_id = "gw4Om2"
         self.vendor_url = f"{self.base_url}/vendors/v1/{self.vendor_id}"
         self.catalog_url = f"{self.base_url}/catalog/v1"
         self.products_url = f"{self.base_url}/products/v1"
@@ -213,6 +215,8 @@ class SnappShop(metaclass=Singleton):
                 result = await response.json()
 
         self.token = JWT(result.get("data", {}).get("token"))
+        set_token(self.token)
+
         global token
         token = self.token
         if self.session.closed:
@@ -427,6 +431,7 @@ def get_item(index=0) -> Item:
 
 async def process_row(item: Item, sem=asyncio.Semaphore(4)):
     async with sem:
+        await asyncio.sleep(1)
         if getattr(item, "done", False) and not pd.isna(item.done):
             return  # skip already done items
         await item.process_item()
@@ -440,6 +445,13 @@ def get_token():
             return json.load(f).get("token")
 
 
+def set_token(token):
+    if not (base_dir / "secrets").exists():
+        os.makedirs(base_dir / "secrets")
+    with open(base_dir / "secrets" / "token.json", "w") as f:
+        json.dump({"token": token}, f, indent=4)
+
+
 async def main():
     token = get_token()
     snappshop = SnappShop(token)
@@ -451,7 +463,7 @@ async def main():
     # r = await item.get_category()
     # print(r)
     # return
-    sem = asyncio.Semaphore(4)
+    sem = asyncio.Semaphore(1)
 
     tasks = []
     for i, row in df.iterrows():
@@ -465,6 +477,11 @@ async def main():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[{levelname} : {filename}:{lineno} : {asctime} -> {funcName:10}] {message}",
+        style="{",
+        handlers=[logging.FileHandler("info.log"), logging.StreamHandler()],
+    )
 
     asyncio.run(main())
