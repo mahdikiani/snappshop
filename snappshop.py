@@ -145,6 +145,24 @@ class Item:
         except Exception as e:
             logging.error(f"item {self.id}: {e}")
 
+    async def add_to_shop(self):
+        try:
+            await self.get_category()
+            await self.get_brand()
+            await self.get_size_ids()
+            await self.get_color_ids()
+            await self.get_weight_ids()
+
+            add_rep = await self.add_item_to_shop()
+            self.done_shop = True
+            # logging.info(f"Item {self.name_fa} added to shop {c_rep}")
+            logging.info(f"Item {self.name_fa} added")
+        except Exception as e:
+            logging.error(f"item {self.id}: {e}")
+
+
+    
+
 
 class SnappShop(metaclass=Singleton):
     def __init__(self, token=None):
@@ -293,8 +311,8 @@ class SnappShop(metaclass=Singleton):
         for op in options_data:
             for weight in option_list:
                 if (
-                    op.get("admin_name") == f"{weight}"
-                    or op.get("admin_name") == f"{weight} گرم"
+                    op.get("admin_name") == f"{weight} گرم"
+                    # or op.get("admin_name") == f"{weight}"
                 ):
                     found_options.append(op)
         return [
@@ -389,6 +407,8 @@ class SnappShop(metaclass=Singleton):
         variants = await item.get_variants()
         tasks = []
         for variant in variants:
+            if not variant.get("price"):
+                continue
             json_data = {
                 "warranty_id": "x0QZq8",
                 "lead_time": 1,  # how mant days
@@ -435,11 +455,13 @@ async def process_row(item: Item, sem=asyncio.Semaphore(4)):
     try:
         async with sem:
             await asyncio.sleep(1)
-            if getattr(item, "done", False) and not pd.isna(item.done):
+            if getattr(item, "done_shop", False) and not pd.isna(item.done):
+            # if getattr(item, "done", False) and not pd.isna(item.done):
                 return  # skip already done items
 
             check_done.check_done(item.id)
-            await item.process_item()
+            # await item.process_item()
+            await item.add_to_shop()
             check_done.add_done(item.id)
             # update_sheet_row(index, item.__dict__)
             return item.__dict__
