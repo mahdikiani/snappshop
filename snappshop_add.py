@@ -11,8 +11,8 @@ import pandas as pd
 from singleton import Singleton
 
 import cache
-import excel
 import check_done
+import excel
 from jwtoken import JWT
 
 try:
@@ -90,7 +90,10 @@ class Item:
     async def get_weight_ids(self):
         snappshop = SnappShop()
         weights = await snappshop.get_variants(self.get_weights(), "weight")
+        # w_index = {v: i for i, v in enumerate(self.get_weights())}
+        # weights = sorted(weights, key=lambda x: w_index[x['raw']])
         self.weight_ids = [{"id": size.get("id")} for size in weights]
+
         return weights
 
     def get_prices(self):
@@ -102,7 +105,10 @@ class Item:
 
     async def get_variants(self):
         variants = await self.get_weight_ids()
-        for variant, p in zip(variants, self.get_prices()):
+        
+        for variant in variants:
+            i = self.get_weights().index(variant["raw"])
+            p = self.get_prices()[i]
             variant["price"] = p
         return variants
 
@@ -137,7 +143,7 @@ class Item:
             await self.get_size_ids()
             await self.get_color_ids()
             await self.get_weight_ids()
-            c_rep = await self.create_item()
+            await self.create_item()
             # add_rep = await self.add_item_to_shop()
             self.done = True
             # logging.info(f"Item {self.name_fa} added to shop {c_rep}")
@@ -153,15 +159,12 @@ class Item:
             await self.get_color_ids()
             await self.get_weight_ids()
 
-            add_rep = await self.add_item_to_shop()
+            await self.add_item_to_shop()
             self.done_shop = True
             # logging.info(f"Item {self.name_fa} added to shop {c_rep}")
             logging.info(f"Item {self.name_fa} added")
         except Exception as e:
             logging.error(f"item {self.id}: {e}")
-
-
-    
 
 
 class SnappShop(metaclass=Singleton):
@@ -311,12 +314,14 @@ class SnappShop(metaclass=Singleton):
         for op in options_data:
             for weight in option_list:
                 if (
-                    op.get("admin_name") == f"{weight} گرم"
+                    op.get("admin_name")
+                    == f"{weight} گرم"
                     # or op.get("admin_name") == f"{weight}"
                 ):
+                    op['raw'] = weight
                     found_options.append(op)
         return [
-            {"id": fo.get("id"), "value": fo.get("admin_name")} for fo in found_options
+            {"id": fo.get("id"), "value": fo.get("admin_name"), "raw": fo.get("raw")} for fo in found_options
         ]
 
     async def create_product_quote(self, item: Item, **kwargs):
@@ -455,18 +460,19 @@ async def process_row(item: Item, sem=asyncio.Semaphore(4)):
     try:
         async with sem:
             await asyncio.sleep(1)
-            if getattr(item, "done", False) and not pd.isna(item.done):
-            # if getattr(item, "done", False) and not pd.isna(item.done):
+            if getattr(item, "done_shop", False) and not pd.isna(item.done):
+                # if getattr(item, "done", False) and not pd.isna(item.done):
                 return  # skip already done items
 
             check_done.check_done(item.id)
-            await item.process_item()
-            # await item.add_to_shop()
+            # await item.process_item()
+            await item.add_to_shop()
             check_done.add_done(item.id)
             # update_sheet_row(index, item.__dict__)
             return item.__dict__
     except Exception as e:
         logging.error(f"{e}")
+        item.error = str(e)
         return item.__dict__
 
 
